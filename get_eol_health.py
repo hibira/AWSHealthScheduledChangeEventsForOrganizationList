@@ -134,59 +134,28 @@ def get_eol_health_events():
         print(f"エラー: {e}")
         return []
 
-def extract_version_from_description(description, metadata):
-    """通知内容からバージョン情報を抽出"""
-    description_lower = description.lower()
-    
-    if 'python 3.9' in description_lower:
-        return 'Python', 'Python 3.9'
-    elif 'python 3.8' in description_lower:
-        return 'Python', 'Python 3.8'
-    elif 'node.js 18' in description_lower:
-        return 'Node.js', 'Node.js 18'
-    elif 'nodejs18' in description_lower:
-        return 'Node.js', 'Node.js 18'
-    
-    # metadataからも推測
-    metadata_str = str(metadata).lower()
-    if 'python 3.9' in metadata_str:
-        return 'Python', 'Python 3.9'
-    elif 'python 3.8' in metadata_str:
-        return 'Python', 'Python 3.8'
-    elif 'node.js 18' in metadata_str:
-        return 'Node.js', 'Node.js 18'
-    
-    return 'Unknown', 'Unknown'
+
 
 def analyze_with_bedrock(events_data):
     """Bedrock Claude 3.7を使ってEOLイベントを分析し表形式で出力"""
     
     bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
     
-    # 通知内容からバージョン情報を抽出してデータを強化
-    enhanced_events = []
-    for event in events_data:
-        platform, version = extract_version_from_description(event.get('description', ''), event.get('eventMetadata', {}))
-        enhanced_event = event.copy()
-        enhanced_event['inferred_platform'] = platform
-        enhanced_event['inferred_version'] = version
-        enhanced_events.append(enhanced_event)
-    
     prompt = f"""以下のAWS Health EOLイベントデータを分析し、指定された形式の表でまとめてください。
 
 データ:
-{json.dumps(enhanced_events, indent=2, ensure_ascii=False)}
+{json.dumps(events_data, indent=2, ensure_ascii=False)}
 
 必須カラム形式:
 | アカウントID | サービス名 | プラットフォーム | バージョン | サポート終了日 | 関連リージョン | ステータス | サマリー |
 
 要件:
 1. アカウントIDは実際の値を表示（複数の場合は「161957781465 他3つ」形式）
-2. プラットフォームとバージョンはinferred_platform、inferred_versionを使用
-4. 関連リージョンは複数の場合カンマ区切り
-5. サポート終了日はYYYY/MM/DD形式
-6. 同じアカウント・サービス・バージョンは1行にまとめる
-7. サマリーには通知内容から重要なポイントを1行で簡潔に記載
+2. プラットフォームとバージョンは通知内容（description）から抽出
+3. サポート終了日は通知内容から抽出してYYYY/MM/DD形式で表示
+4. 関連リージョンは複数の場合は「ap-northeast-1 他3つ」形式
+5. 同じアカウント・サービス・バージョンは1行にまとめる
+6. サマリーには通知内容から重要なポイントを1行で簡潔に記載
 
 表のみ出力し、余計な説明は不要です。"""
 
@@ -224,11 +193,7 @@ def main():
     
     print(f"{len(eol_events)}件のイベントが見つかりました。")
     
-    # 抽出されたバージョン情報を表示
-    print("\n=== 抽出されたバージョン情報 ===")
-    for event in eol_events:
-        platform, version = extract_version_from_description(event.get('description', ''), event.get('eventMetadata', {}))
-        print(f"サービス: {event['service']}, 開始日: {event['startTime'][:10]}, 抽出: {platform} {version}")
+
     
     print("\nBedrock Claude 3.7で分析中...")
     
